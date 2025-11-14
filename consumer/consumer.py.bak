@@ -1,0 +1,20 @@
+from kafka import KafkaConsumer
+import json
+import time
+import os
+
+KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9092")
+TOPIC = os.getenv("TOPIC", "runner-events")
+
+print("Consumer started. Listening for messages...")
+
+consumer = KafkaConsumer(
+    TOPIC,
+    bootstrap_servers=[KAFKA_BROKER],
+    value_deserializer=lambda v: json.loads(v.decode('utf-8')),
+    auto_offset_reset='earliest',
+    group_id='runner-group'
+)
+
+for message in consumer:
+    print(f"[Kafka] Received: {message.value}")

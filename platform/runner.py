@@ -1,44 +1,57 @@
-import subprocess
-import json
-import os
-import datetime
+#!/usr/bin/env python3
+import subprocess, json, os, uuid, time, sys
+from kafka import KafkaProducer
 
-def run_reproducer():
-    # 设置 docker 命令（根据需要修改）
-    command = ["docker", "run", "--rm", "repro-cve-hello:0.1"]
-    
+# 可修改：镜像名、Kafka地址、topic
+IMAGE = os.environ.get("REPRO_IMAGE", "repro-cve-hello:0.1")
+KAFKA_BOOTSTRAP = os.environ.get("KAFKA_BOOTSTRAP", "localhost:9092")
+KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "evidence_topic")
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "outputs")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+def run_container_and_capture(image: str):
+    cmd = ["docker", "run", "--rm", image]
+    print("Running:", " ".join(cmd))
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    stdout = proc.stdout.strip()
+    stderr = proc.stderr.strip()
+    return stdout, stderr, proc.returncode
+
+def save_output(stdout: str, stderr: str, returncode: int):
+    run_id = str(uuid.uuid4())
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    out = {
+        "runner_run_id": run_id,
+        "timestamp": timestamp,
+        "container_returncode": returncode,
+        "stdout": None,
+        "stderr": stderr
+    }
     try:
-        # 执行 docker 命令并捕获 stdout
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
-        
-        # 获取当前时间
-        timestamp = datetime.datetime.now().isoformat()
+        out["stdout"] = json.loads(stdout) if stdout else None
+    except Exception:
+        out["stdout"] = stdout
+    fname = os.path.join(OUTPUT_DIR, f"evidence_{run_id}.json")
+    with open(fname, "w", encoding="utf-8") as f:
+        json.dump(out, f, indent=2, ensure_ascii=False)
+    print("Saved evidence to", fname)
+    return fname, out
 
-        # 定义输出的 JSON 格式
-        output_data = {
-            "plugin": "repro-cve-hello",
-            "run_id": "1234-5678-90",  # 这里你可以根据需要生成或获取 run_id
-            "timestamp": timestamp,
-            "stdout": result.stdout,  # 捕获的 stdout
-            "stderr": result.stderr,  # 捕获的 stderr
-        }
-
-        # 创建 outputs 文件夹（如果不存在）
-        if not os.path.exists("outputs"):
-            os.makedirs("outputs")
-        
-        # 定义输出文件路径
-        output_file = os.path.join("outputs", f"evidence_{timestamp}.json")
-
-        # 将输出数据写入 JSON 文件
-        with open(output_file, "w") as f:
-            json.dump(output_data, f, indent=4)
-
-        print(f"Saved evidence to {output_file}")
-
-    except subprocess.CalledProcessError as e:
-        print(f"Error occurred while running the command: {e}")
-        print(f"stderr: {e.stderr}")
+def push_to_kafka(evidence_obj):
+    try:
+        producer = KafkaProducer(
+            bootstrap_servers=[KAFKA_BOOTSTRAP],
+            value_serializer=lambda v: json.dumps(v).encode('utf-8')
+        )
+        producer.send(KAFKA_TOPIC, value=evidence_obj)
+        producer.flush()
+        print("Pushed evidence to Kafka topic:", KAFKA_TOPIC)
+    except Exception as e:
+        print("Failed to push to Kafka:", e, file=sys.stderr)
 
 if __name__ == "__main__":
-    run_reproducer()
+    stdout, stderr, rc = run_container_and_capture(IMAGE)
+    fname, evidence = save_output(stdout, stderr, rc)
+    # 加入文件路径信息到 evidence，再推送
+    evidence["_local_file"] = fname
+    push_to_kafka(evidence)
