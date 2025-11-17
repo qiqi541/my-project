@@ -1,0 +1,3 @@
+# 忽略 outputs 中的运行生成的证据与数据库
+outputs/*.json
+outputs/evidence.db
