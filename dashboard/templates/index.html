@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>攻击态势感知大屏</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta http-equiv="refresh" content="3"> <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1e1e2f; color: #fff; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { text-align: center; color: #00d4ff; }
+
+        /* 统计卡片样式 */
+        .stats-row { display: flex; justify-content: space-between; margin-bottom: 30px; }
+        .card { background: #27293d; padding: 20px; border-radius: 10px; width: 30%; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .number { font-size: 36px; font-weight: bold; margin-top: 10px; }
+        .red { color: #ff3b3b; }   /* 红色代表成功入侵 */
+        .green { color: #00f2c3; } /* 绿色代表被拦截/失败 */
+
+        /* 图表容器 */
+        .chart-container { background: #27293d; padding: 20px; border-radius: 10px; margin-bottom: 30px; }
+
+        /* 表格样式 */
+        table { width: 100%; border-collapse: collapse; background: #27293d; border-radius: 10px; overflow: hidden; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #3d3f54; }
+        th { background-color: #34364a; color: #00d4ff; }
+        .log-success { color: #ff3b3b; font-weight: bold; } /* 攻击成功显示红色警告 */
+        .log-fail { color: #888; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛡️ 密码应用漏洞复现与验证系统</h1>
+
+        <div class="stats-row">
+            <div class="card">
+                <div>总攻击次数</div>
+                <div class="number">{{ total }}</div>
+            </div>
+            <div class="card">
+                <div style="color:#ff3b3b">漏洞利用成功</div>
+                <div class="number red">{{ success }}</div>
+            </div>
+            <div class="card">
+                <div style="color:#00f2c3">尝试失败</div>
+                <div class="number green">{{ fail }}</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="attackChart" style="max-height: 300px;"></canvas>
+        </div>
+
+        <h3>🚀 实时攻击数据流 (Recent Logs)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>攻击类型</th>
+                    <th>Payload</th>
+                    <th>结果</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log[1] }}</td> <td>{{ log[2] }}</td> <td class="{{ 'log-success' if log[4] == 'success' else 'log-fail' }}">
+                        {{ log[4].upper() }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // 配置饼图
+        var ctx = document.getElementById('attackChart').getContext('2d');
+        var myChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['漏洞利用成功 (Success)', '攻击失败 (Fail)'],
+                datasets: [{
+                    data: [{{ success }}, {{ fail }}],
+                    backgroundColor: ['#ff3b3b', '#00f2c3'],
+                    borderWidth: 0
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    </script>
+</body>
+</html>
