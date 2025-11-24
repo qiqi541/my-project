@@ -1,0 +1,60 @@
+version: '3'
+services:
+  # --- 1. 基础设施层：Zookeeper 和 Kafka ---
+  zookeeper:
+    image: bitnami/zookeeper:latest
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    networks:
+      - my_net
+
+  kafka:
+    image: bitnami/kafka:3.5.1
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    depends_on:
+      - zookeeper
+    networks:
+      - my_net
+
+  # --- 2. 漏洞网站 (靶机) ---
+  vuln-web:
+    build: ./vuln-web
+    ports:
+      - "5000:5000"
+    networks:
+      - my_net
+
+  # --- 3. 攻击者 (Producer) ---
+  producer:
+    build: ./producer
+    environment:
+      - KAFKA_BROKER=kafka:9092
+    depends_on:
+      - kafka
+      - vuln-web  # 确保网站启动了才能攻击
+    networks:
+      - my_net
+
+  # --- 4. 记录员 (Consumer) ---
+  consumer:
+    build: ./consumer
+    environment:
+      - KAFKA_BROKER=kafka:9092
+    volumes:
+      # 这一行非常重要，它将数据库文件映射到你的本地文件夹，实现数据持久化
+      - ./passwords.db:/app/passwords.db 
+    depends_on:
+      - kafka
+    networks:
+      - my_net
+
+networks:
+  my_net:
+    driver: bridge
+

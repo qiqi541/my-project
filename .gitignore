@@ -1,0 +1,10 @@
+# 忽略 Python 缓存
+__pycache__/
+*.pyc
+
+# 忽略数据库文件 (非常重要！不要把密码库传上去)
+*.db
+passwords.db
+
+# 忽略 Docker 此时不需要的临时文件
+.DS_Store

@@ -1,13 +1,5 @@
-FROM python:3.10-slim
-
+FROM python:3.9-slim
 WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY app.py .
-VOLUME ["/app/outputs"]
-
-EXPOSE 8000
-
+RUN pip install flask
+COPY . .
 CMD ["python", "app.py"]
