@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>系统登录 - 态势感知平台</title>
+    <style>
+        body { background-color: #1e1e2f; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-box { background: #27293d; padding: 40px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); text-align: center; width: 300px; }
+        h2 { color: #00d4ff; margin-bottom: 30px; }
+        input { width: 100%; padding: 10px; margin: 10px 0; background: #1e1e2f; border: 1px solid #3d3f54; color: #fff; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #00d4ff; border: none; color: #1e1e2f; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 20px; }
+        button:hover { background: #00b8d4; }
+        .error { color: #ff3b3b; margin-top: 15px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h2>🔐 系统访问控制</h2>
+        <form method="post" action="/login">
+            <input type="text" name="username" placeholder="管理员账号" required>
+            <input type="password" name="password" placeholder="访问口令" required>
+            <button type="submit">身份验证</button>
+        </form>
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+    </div>
+</body>
+</html>
